@@ -275,29 +275,125 @@
   const pathRed  = document.getElementById('pathRed');
   const dotBlue  = document.getElementById('dotBlue');
   const dotRed   = document.getElementById('dotRed');
-  const dashLen  = 235;
+
+  // getTotalLength()/getPointAtLength() force a layout recalculation.
+  // The path shapes never change, so these are computed ONCE and cached —
+  // calling them every animation frame was what caused the freeze.
+  const blueLen = pathBlue.getTotalLength();
+  const redLen  = pathRed.getTotalLength();
+  const dashLen = 235;
 
   let level = 0.22;       // current smoothed audio level 0..1
   let targetLevel = 0.22;
   let ambientPhase = 0;
   let liveDataReceived = false;
   let t = 0;
+  let running = true;
+  let rafId = null;
+  const FRAME_MS = 1000 / 30; // throttle to ~30fps, plenty smooth for a slow-moving glow
+  let lastFrameTime = 0;
 
-  function getPointAtLength(path, len){
-    const total = path.getTotalLength();
-    const clamped = ((len % total) + total) % total;
+  function pointAt(path, cachedTotal, len){
+    const clamped = ((len % cachedTotal) + cachedTotal) % cachedTotal;
     return path.getPointAtLength(clamped);
   }
 
-  function frame(){
+  function frame(now){
+    rafId = requestAnimationFrame(frame);
+    if (!running) return;
+    if (now - lastFrameTime < FRAME_MS) return;
+    lastFrameTime = now;
+
     t += 1;
 
     if (!liveDataReceived){
       // gentle ambient breathing so the loop feels alive before playback starts
-      ambientPhase += 0.018;
+      ambientPhase += 0.03;
       targetLevel = 0.16 + Math.sin(ambientPhase) * 0.06;
     }
     level += (targetLevel - level) * 0.12;
 
     const speed = 0.6 + level * 2.6;
-    const offset =
+    const offset = (t * speed) % dashLen;
+
+    // sweep glow segment travels around each half of the loop
+    const segLen = 60 + level * 90;
+    const dashArr = segLen + ' ' + (dashLen - segLen);
+    pathBlue.setAttribute('stroke-dasharray', dashArr);
+    pathRed.setAttribute('stroke-dasharray', dashArr);
+    pathBlue.setAttribute('stroke-dashoffset', String(-offset));
+    pathRed.setAttribute('stroke-dashoffset', String(-offset));
+
+    const strokeW = (2.5 + level * 5).toFixed(2);
+    pathBlue.setAttribute('stroke-width', strokeW);
+    pathRed.setAttribute('stroke-width', strokeW);
+
+    const pB = pointAt(pathBlue, blueLen, dashLen - offset);
+    const pR = pointAt(pathRed, redLen, dashLen - offset);
+    dotBlue.setAttribute('cx', pB.x); dotBlue.setAttribute('cy', pB.y);
+    dotRed.setAttribute('cx', pR.x);  dotRed.setAttribute('cy', pR.y);
+    const dotR = (3.5 + level * 4).toFixed(2);
+    dotBlue.setAttribute('r', dotR); dotRed.setAttribute('r', dotR);
+  }
+  rafId = requestAnimationFrame(frame);
+
+  // pause the loop entirely when the tab/view isn't visible so it can't
+  // pile up work in the background and stall when it comes back
+  document.addEventListener('visibilitychange', () => {
+    running = !document.hidden;
+  });
+
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
+    const candidate = data.volume ?? data.level ?? data.audioLevel ?? data.value ?? (data.data && data.data.volume);
+    if (typeof candidate === 'number'){
+      liveDataReceived = true;
+      const normalized = candidate > 1 ? candidate / 100 : candidate;
+      targetLevel = Math.max(0.12, Math.min(1, normalized));
+    }
+  });
+
+  // ---- play overlay: guarantees a visible, tappable play affordance ----
+  const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart";
+  const playerFrame = document.getElementById('playerFrame');
+  const playOverlay = document.getElementById('playOverlay');
+  const overlayLabel = document.getElementById('overlayLabel');
+  const hintText = document.getElementById('hintText');
+  let started = false;
+  let retryTimer = null;
+
+  function startPlayback(){
+    started = true;
+    playerFrame.src = STREAM_URL;
+    playOverlay.classList.add('hidden');
+    hintText.innerHTML = 'Live audio starting…';
+
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => {
+      if (!liveDataReceived){
+        // playback never confirmed — surface the overlay again so it's never a dead end
+        overlayLabel.textContent = 'Tap to reconnect';
+        playOverlay.classList.remove('hidden');
+        hintText.innerHTML = 'Having trouble? Tap <b>reconnect</b> above';
+      }
+    }, 7000);
+  }
+
+  playOverlay.addEventListener('click', startPlayback);
+  playOverlay.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); startPlayback(); }
+  });
+
+  // reconnect the iframe if it drops (only once playback has actually started)
+  setInterval(()=>{
+    if (!started) return;
+    const f = document.getElementById('playerFrame');
+    if (f && f.contentWindow == null){
+      f.src = f.src;
+    }
+  }, 15000);
+</script>
+
+</body>
+</html>
