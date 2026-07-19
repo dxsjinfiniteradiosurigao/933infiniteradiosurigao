@@ -213,21 +213,40 @@
     letter-spacing:0.03em;
   }
 
-  .player-shell{
-    max-height:0;
+  .screen-frame{
+    background:var(--navy-deep);
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.14);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.03), 0 14px 30px rgba(0,0,0,0.4);
     overflow:hidden;
-    border-radius:12px;
-    margin-bottom:0;
-    transition:max-height 0.35s ease, margin-bottom 0.35s ease;
-    border:1px solid rgba(255,255,255,0.12);
+    margin-bottom:10px;
   }
-  .player-shell.open{
-    max-height:220px;
-    margin-bottom:18px;
+  .screen-topbar{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 12px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
+    border-bottom:1px solid rgba(255,255,255,0.08);
   }
-  .player-shell iframe{
+  .screen-dot{
+    width:7px;height:7px;border-radius:50%;
+    background:rgba(255,255,255,0.18);
+  }
+  .screen-dot:nth-child(1){background:var(--flag-red);}
+  .screen-dot:nth-child(2){background:var(--sun-gold);}
+  .screen-dot:nth-child(3){background:var(--flag-blue);}
+  .screen-label{
+    margin-left:auto;
+    font-family:'Barlow Condensed', sans-serif;
+    font-size:11px;
+    letter-spacing:0.14em;
+    color:var(--mist);
+    text-transform:uppercase;
+  }
+  .screen-body iframe{
     width:100%;
-    height:200px;
+    height:220px;
     border:none;
     display:block;
     background:#000;
@@ -236,7 +255,7 @@
     text-align:center;
     font-size:11.5px;
     color:var(--mist);
-    margin:-4px 0 14px;
+    margin:0 0 22px;
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -255,24 +274,18 @@
     <div class="station-name">Infinite Radio</div>
     <div class="tagline">Surigao City · Streaming worldwide</div>
 
-    <div class="dial-wrap">
-      <div class="dial-ring">
-        <button class="play-btn" id="playBtn" aria-label="Play live stream">
-          <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        </button>
+    <div class="screen-frame">
+      <div class="screen-topbar">
+        <span class="screen-dot"></span>
+        <span class="screen-dot"></span>
+        <span class="screen-dot"></span>
+        <span class="screen-label">LIVE PLAYER</span>
       </div>
-      <div class="bars" id="bars">
-        <span></span><span></span><span></span><span></span><span></span>
+      <div class="screen-body">
+        <iframe id="playerFrame" src="https://vdo.ninja/?view=hSKAP98&cleanoutput" allow="autoplay; microphone; camera" title="Infinite Radio live audio"></iframe>
       </div>
     </div>
-
-    <div class="now-label">Status</div>
-    <div class="now-status" id="statusText">Tap play to listen live</div>
-
-    <div class="player-shell" id="playerShell">
-      <iframe id="playerFrame" allow="autoplay; microphone; camera" title="Infinite Radio live audio"></iframe>
-    </div>
-    <div class="player-hint" id="playerHint" style="display:none;">If sound doesn't start, tap the play button inside the player above.</div>
+    <div class="player-hint">Tap play on the player above to start listening.</div>
 
     <div class="share-row">
       <button class="share-btn" id="copyBtn">
@@ -289,43 +302,7 @@
   </div>
 
 <script>
-  const playBtn = document.getElementById('playBtn');
-  const playIcon = document.getElementById('playIcon');
-  const bars = document.getElementById('bars');
-  const statusText = document.getElementById('statusText');
-  const frame = document.getElementById('playerFrame');
-  const shell = document.getElementById('playerShell');
-  const hint = document.getElementById('playerHint');
   const copyBtn = document.getElementById('copyBtn');
-
-  const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput";
-
-  const pauseSVG = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
-  const playSVG = '<path d="M8 5v14l11-7z"/>';
-
-  let playing = false;
-
-  playBtn.addEventListener('click', () => {
-    if (!playing) {
-      frame.src = STREAM_URL;
-      shell.classList.add('open');
-      hint.style.display = 'block';
-      statusText.textContent = "Player loaded — tap play below";
-      playIcon.innerHTML = pauseSVG;
-      playBtn.classList.add('playing');
-      bars.classList.add('active');
-      playing = true;
-    } else {
-      frame.src = "";
-      shell.classList.remove('open');
-      hint.style.display = 'none';
-      statusText.textContent = "Tap play to listen live";
-      playIcon.innerHTML = playSVG;
-      playBtn.classList.remove('playing');
-      bars.classList.remove('active');
-      playing = false;
-    }
-  });
 
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
