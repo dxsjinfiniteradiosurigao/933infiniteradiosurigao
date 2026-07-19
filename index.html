@@ -306,7 +306,11 @@
 
     <div class="screen">
       <div class="screen-body">
-        <iframe id="playerFrame" src="https://vdo.ninja/?view=hSKAP98" allow="autoplay; microphone; camera" title="Infinite Radio live audio"></iframe>
+        <iframe id="playerFrame"
+src="https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart"
+allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture"
+allowfullscreen
+title="Infinite Radio live audio"></iframe>
       </div>
     </div>
     <div class="hint">Tap <b>play</b> on the player above to start listening.</div>
@@ -352,6 +356,14 @@
       applyLevel(normalized);
     }
   });
+
+setInterval(()=>{
+ const f=document.getElementById('playerFrame');
+ if(f && f.contentWindow==null){
+   f.src=f.src;
+ }
+},15000);
+
 </script>
 
 </body>
