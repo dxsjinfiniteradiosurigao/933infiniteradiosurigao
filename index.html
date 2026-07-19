@@ -143,6 +143,37 @@
   .player-shell{position:relative; width:100%; height:118px;}
   .player-shell iframe{width:100%; height:100%; border:none; display:block; background:transparent;}
 
+  .play-overlay{
+    position:absolute; inset:0; z-index:3;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, rgba(0,0,254,0.16), rgba(187,1,2,0.16)), rgba(5,7,13,0.55);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    cursor:pointer;
+    transition:opacity 0.35s ease, visibility 0.35s ease;
+  }
+  .play-overlay.hidden{opacity:0; visibility:hidden; pointer-events:none;}
+  .play-btn{
+    width:56px; height:56px; border-radius:50%;
+    background:conic-gradient(from 180deg, var(--blue) 0%, var(--blue) 48%, var(--red) 52%, var(--red) 100%);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 8px 22px rgba(0,0,0,0.45), 0 0 0 4px rgba(255,255,255,0.08);
+    position:relative;
+    animation:playPulse 2.2s ease-in-out infinite;
+  }
+  .play-btn::after{
+    content:""; position:absolute; inset:3px; border-radius:50%; background:var(--ink);
+  }
+  .play-btn svg{position:relative; z-index:1; width:20px; height:20px; margin-left:3px; fill:#fff;}
+  @keyframes playPulse{
+    0%,100%{box-shadow:0 8px 22px rgba(0,0,0,0.45), 0 0 0 4px rgba(255,255,255,0.08);}
+    50%{box-shadow:0 8px 26px rgba(0,0,0,0.45), 0 0 0 9px rgba(255,255,255,0.03);}
+  }
+  .play-overlay-label{
+    position:absolute; bottom:9px; left:0; right:0; text-align:center;
+    font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.75);
+    font-weight:600;
+  }
+
   .hint{
     text-align:center; font-size:10.5px; color:var(--text-dimmer);
     margin-top:9px; letter-spacing:0.02em;
@@ -209,13 +240,16 @@
       <div class="dock-frame">
         <div class="player-shell">
           <iframe id="playerFrame"
-            src="https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart"
             allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture"
             allowfullscreen
             title="Infinite Radio live audio"></iframe>
+          <div class="play-overlay" id="playOverlay" role="button" tabindex="0" aria-label="Play live audio">
+            <div class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+            <div class="play-overlay-label" id="overlayLabel">Tap to listen live</div>
+          </div>
         </div>
       </div>
-      <div class="hint">Tap <b>play</b> above to start listening</div>
+      <div class="hint" id="hintText">Tap <b>play</b> above to start listening</div>
     </div>
 
   </div>
@@ -266,49 +300,4 @@
     level += (targetLevel - level) * 0.12;
 
     const speed = 0.6 + level * 2.6;
-    const offset = (t * speed) % dashLen;
-
-    // sweep glow segment travels around each half of the loop
-    const segLen = 60 + level * 90;
-    pathBlue.setAttribute('stroke-dasharray', segLen + ' ' + (dashLen - segLen));
-    pathRed.setAttribute('stroke-dasharray', segLen + ' ' + (dashLen - segLen));
-    pathBlue.setAttribute('stroke-dashoffset', String(-offset));
-    pathRed.setAttribute('stroke-dashoffset', String(-offset));
-
-    const strokeW = (2.5 + level * 5).toFixed(2);
-    pathBlue.setAttribute('stroke-width', strokeW);
-    pathRed.setAttribute('stroke-width', strokeW);
-
-    const pB = getPointAtLength(pathBlue, dashLen - offset);
-    const pR = getPointAtLength(pathRed, dashLen - offset);
-    dotBlue.setAttribute('cx', pB.x); dotBlue.setAttribute('cy', pB.y);
-    dotRed.setAttribute('cx', pR.x);  dotRed.setAttribute('cy', pR.y);
-    const dotR = (3.5 + level * 4).toFixed(2);
-    dotBlue.setAttribute('r', dotR); dotRed.setAttribute('r', dotR);
-
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-
-  window.addEventListener('message', (event) => {
-    const data = event.data;
-    if (!data || typeof data !== 'object') return;
-    const candidate = data.volume ?? data.level ?? data.audioLevel ?? data.value ?? (data.data && data.data.volume);
-    if (typeof candidate === 'number'){
-      liveDataReceived = true;
-      const normalized = candidate > 1 ? candidate / 100 : candidate;
-      targetLevel = Math.max(0.12, Math.min(1, normalized));
-    }
-  });
-
-  // reconnect the iframe if it drops
-  setInterval(()=>{
-    const f = document.getElementById('playerFrame');
-    if (f && f.contentWindow == null){
-      f.src = f.src;
-    }
-  }, 15000);
-</script>
-
-</body>
-</html>
+    const offset =
