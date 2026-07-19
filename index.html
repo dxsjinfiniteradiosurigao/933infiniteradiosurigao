@@ -213,11 +213,30 @@
     letter-spacing:0.03em;
   }
 
-  iframe.hidden-player{
-    position:absolute;
-    width:1px;height:1px;
-    opacity:0;
-    pointer-events:none;
+  .player-shell{
+    max-height:0;
+    overflow:hidden;
+    border-radius:12px;
+    margin-bottom:0;
+    transition:max-height 0.35s ease, margin-bottom 0.35s ease;
+    border:1px solid rgba(255,255,255,0.12);
+  }
+  .player-shell.open{
+    max-height:220px;
+    margin-bottom:18px;
+  }
+  .player-shell iframe{
+    width:100%;
+    height:200px;
+    border:none;
+    display:block;
+    background:#000;
+  }
+  .player-hint{
+    text-align:center;
+    font-size:11.5px;
+    color:var(--mist);
+    margin:-4px 0 14px;
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -250,6 +269,11 @@
     <div class="now-label">Status</div>
     <div class="now-status" id="statusText">Tap play to listen live</div>
 
+    <div class="player-shell" id="playerShell">
+      <iframe id="playerFrame" allow="autoplay; microphone; camera" title="Infinite Radio live audio"></iframe>
+    </div>
+    <div class="player-hint" id="playerHint" style="display:none;">If sound doesn't start, tap the play button inside the player above.</div>
+
     <div class="share-row">
       <button class="share-btn" id="copyBtn">
         <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
@@ -264,17 +288,17 @@
     <div class="foot">93.3 Infinite Radio Surigao &nbsp;·&nbsp; Live audio feed</div>
   </div>
 
-  <iframe id="playerFrame" class="hidden-player" allow="autoplay; microphone; camera" title="Infinite Radio live audio"></iframe>
-
 <script>
   const playBtn = document.getElementById('playBtn');
   const playIcon = document.getElementById('playIcon');
   const bars = document.getElementById('bars');
   const statusText = document.getElementById('statusText');
   const frame = document.getElementById('playerFrame');
+  const shell = document.getElementById('playerShell');
+  const hint = document.getElementById('playerHint');
   const copyBtn = document.getElementById('copyBtn');
 
-  const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput&autostart";
+  const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput";
 
   const pauseSVG = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
   const playSVG = '<path d="M8 5v14l11-7z"/>';
@@ -284,14 +308,17 @@
   playBtn.addEventListener('click', () => {
     if (!playing) {
       frame.src = STREAM_URL;
-      statusText.textContent = "Connecting…";
-      setTimeout(() => { statusText.textContent = "Live now"; }, 1400);
+      shell.classList.add('open');
+      hint.style.display = 'block';
+      statusText.textContent = "Player loaded — tap play below";
       playIcon.innerHTML = pauseSVG;
       playBtn.classList.add('playing');
       bars.classList.add('active');
       playing = true;
     } else {
       frame.src = "";
+      shell.classList.remove('open');
+      hint.style.display = 'none';
       statusText.textContent = "Tap play to listen live";
       playIcon.innerHTML = playSVG;
       playBtn.classList.remove('playing');
