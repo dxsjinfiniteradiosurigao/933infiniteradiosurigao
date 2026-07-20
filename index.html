@@ -104,49 +104,33 @@
 
   /* controls */
   .controls{flex:0 0 auto; margin-top:20px;}
-  .transport{display:flex; align-items:center; justify-content:center; gap:16px;}
-  .wave{display:flex; align-items:center; gap:3px; height:26px; width:56px;}
-  .wave.left{justify-content:flex-end;}
-  .wave.right{justify-content:flex-start;}
-  .wave span{width:3px; border-radius:2px; height:5px; background:var(--text-dimmer); transition:background 0.4s ease;}
-  .wave.blue span{background:var(--blue-soft);}
-  .wave.red span{background:var(--red-soft);}
-  .wave span:nth-child(1){animation-delay:0s;}
-  .wave span:nth-child(2){animation-delay:0.15s;}
-  .wave span:nth-child(3){animation-delay:0.3s;}
-  .wave span:nth-child(4){animation-delay:0.45s;}
-  .wave span:nth-child(5){animation-delay:0.2s;}
-  .wave.playing span{animation:waveBeat 1.1s ease-in-out infinite;}
-  @keyframes waveBeat{0%,100%{height:5px;} 50%{height:24px;}}
 
-  .play-btn{
-    width:66px; height:66px; border-radius:50%; flex:0 0 auto; position:relative; cursor:pointer;
-    background:conic-gradient(from 180deg, var(--blue) 0%, var(--blue) 48%, var(--red) 52%, var(--red) 100%);
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:0 10px 26px rgba(0,0,0,0.5), 0 0 0 5px rgba(255,255,255,0.06);
-    transition:transform 0.15s ease;
+  .tap-panel{
+    position:relative; border-radius:20px; overflow:hidden; height:130px;
+    background:linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    border:1px solid var(--glass-brd);
+    box-shadow:0 18px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
   }
-  .play-btn:active{transform:scale(0.94);}
-  .play-btn::after{content:""; position:absolute; inset:3px; border-radius:50%; background:var(--ink);}
-  .play-btn svg{position:relative; z-index:1; width:24px; height:24px; fill:#fff;}
-  .play-btn .icon-play{margin-left:3px;}
-  .play-btn .icon-pause, .play-btn .icon-loading{display:none;}
-  .play-btn.is-playing .icon-play{display:none;}
-  .play-btn.is-playing .icon-pause{display:block;}
-  .play-btn.is-loading .icon-play, .play-btn.is-loading .icon-pause{display:none;}
-  .play-btn.is-loading .icon-loading{display:block; animation:spin 0.9s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg);}}
+  .tap-panel::before{
+    content:""; position:absolute; inset:0; border-radius:20px; padding:1.5px; pointer-events:none; z-index:2;
+    background:linear-gradient(120deg, var(--blue) 0%, transparent 40%, transparent 60%, var(--red) 100%);
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude;
+    opacity:0.6; animation:trimGlow 3s ease-in-out infinite;
+  }
+  @keyframes trimGlow{0%,100%{opacity:0.4;} 50%{opacity:0.8;}}
+  .tap-panel iframe{position:relative; z-index:1; width:100%; height:100%; border:none; display:block; background:transparent;}
 
-  .time-row{display:flex; align-items:center; justify-content:space-between; margin-top:16px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim);}
+  .tap-instruction{text-align:center; font-size:12.5px; color:var(--text-dim); margin-top:10px;}
+  .tap-instruction b{color:#fff; font-weight:700;}
+
+  .time-row{display:flex; align-items:center; justify-content:center; margin-top:14px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim);}
   .time-row .live-tag{display:flex; align-items:center; gap:6px; font-weight:700; letter-spacing:0.08em;}
   .time-row .live-tag .dot{width:6px; height:6px; border-radius:50%; background:var(--red-soft); box-shadow:0 0 8px var(--red-soft);}
   .time-row .live-tag.idle .dot{background:var(--text-dimmer); box-shadow:none; animation:none !important;}
   .time-row .live-tag:not(.idle) .dot{animation:ping 1.6s infinite;}
   @keyframes ping{0%{box-shadow:0 0 0 0 rgba(255,59,59,0.55);}70%{box-shadow:0 0 0 7px rgba(255,59,59,0);}100%{box-shadow:0 0 0 0 rgba(255,59,59,0);}}
-  .progress-track{flex:1; height:3px; margin:0 12px; border-radius:2px; background:rgba(255,255,255,0.1); overflow:hidden; position:relative;}
-  .progress-fill{position:absolute; top:0; bottom:0; left:-40%; width:40%; border-radius:2px; background:linear-gradient(90deg, var(--blue-soft), var(--red-soft)); opacity:0.35;}
-  .progress-fill.animate{animation:progressSlide 2.2s ease-in-out infinite;}
-  @keyframes progressSlide{0%{left:-40%;} 100%{left:100%;}}
+  @keyframes spin{to{transform:rotate(360deg);}}
 
   .icon-row{display:flex; align-items:center; justify-content:center; gap:34px; margin-top:22px;}
   .icon-btn{background:none; border:none; padding:6px; cursor:pointer; color:var(--text-dim); display:flex; flex-direction:column; align-items:center; gap:5px; transition:color 0.2s ease, transform 0.15s ease;}
@@ -167,18 +151,8 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
-  .native-player{
-    margin-top:14px; border-radius:16px; overflow:hidden;
-    border:1px solid var(--glass-brd); background:rgba(255,255,255,0.04);
-    max-height:0; opacity:0; transition:max-height 0.4s ease, opacity 0.3s ease;
-  }
-  .native-player.visible{max-height:90px; opacity:1;}
-  .native-player iframe{width:100%; height:90px; border:none; display:block; background:transparent;}
-  .native-player-hint{font-size:10px; text-align:center; color:var(--text-dimmer); margin-top:8px; letter-spacing:0.01em;}
-  .native-player-hint.hidden{display:none;}
-
   @media (prefers-reduced-motion: reduce){
-    .bg span, .art .ring, .wave.playing span, .time-row .live-tag .dot, .progress-fill.animate{animation:none !important;}
+    .bg span, .art .ring, .time-row .live-tag .dot, .tap-panel::before{animation:none !important;}
   }
   @media (max-height:700px){
     .art-wrap{margin-bottom:14px;}
@@ -220,19 +194,12 @@
     </div>
 
     <div class="controls">
-      <div class="transport">
-        <div class="wave left blue" id="waveLeft"><span></span><span></span><span></span><span></span><span></span></div>
-        <div class="play-btn" id="playBtn" role="button" tabindex="0" aria-label="Play live stream">
-          <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="icon-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
-          <svg class="icon-loading" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7z"/></svg>
-        </div>
-        <div class="wave right red" id="waveRight"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="tap-panel" id="tapPanel">
+        <iframe id="playerFrame" src="https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart" allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture" allowfullscreen title="Infinite Radio live audio"></iframe>
       </div>
+      <div class="tap-instruction"><b>Tap the box above</b> to start listening live</div>
 
       <div class="time-row">
-        <span id="elapsedTime">00:00</span>
-        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
         <span class="live-tag idle" id="liveTag"><span class="dot"></span>LIVE</span>
       </div>
 
@@ -250,11 +217,6 @@
           <span>Share</span>
         </button>
       </div>
-
-      <div class="native-player" id="nativePlayer">
-        <iframe id="playerFrame" allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture" allowfullscreen title="Infinite Radio live audio"></iframe>
-      </div>
-      <div class="native-player-hint hidden" id="nativeHint">iPhone requires one direct tap on the player above to start audio</div>
     </div>
 
     <div class="tagline">News · Talk · Music — <b>tap play</b> to join the signal, live from Surigao City.</div>
@@ -289,134 +251,41 @@
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
   }
 
-  // ---- player state machine ----
-  // States: 'stopped' -> 'loading' -> 'live'
-  // NOTE: earlier versions guessed at playback success using postMessage
-  // volume events from the vdo.ninja iframe. Those events aren't reliably
-  // sent, so the UI would wrongly flip to "reconnect" even while the
-  // stream was playing fine. State now only changes from user action and
-  // the iframe's own 'load' event — never from an assumed timeout.
+  // ---- player ----
+  // The vdo.ninja player is embedded directly and always visible now —
+  // no custom play button standing in front of it. The user taps the
+  // actual player, so the tap always lands inside the right browsing
+  // context and there's no gesture-propagation issue on any platform
+  // (this is what made iOS unreliable before).
   const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart";
   const DIRECT_URL = "https://vdo.ninja/?view=hSKAP98";
 
-  // iOS/iPadOS (all browsers there are WebKit under the hood, this
-  // isn't Safari-specific). WebKit does not let a tap on our page count
-  // as the user gesture that authorizes audio to autoplay *inside* a
-  // cross-origin iframe — the gesture has to land directly inside that
-  // iframe's own document. So on iOS we reveal the real vdo.ninja player
-  // (with its own native play button) instead of keeping it hidden.
-  const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
   const playerFrame  = document.getElementById('playerFrame');
-  const nativePlayer = document.getElementById('nativePlayer');
-  const nativeHint   = document.getElementById('nativeHint');
-  const playBtn      = document.getElementById('playBtn');
-  const waveLeft     = document.getElementById('waveLeft');
-  const waveRight    = document.getElementById('waveRight');
   const liveTag      = document.getElementById('liveTag');
-  const progressFill = document.getElementById('progressFill');
-  const elapsedEl    = document.getElementById('elapsedTime');
   const reconnectBtn = document.getElementById('reconnectBtn');
   const directBtn    = document.getElementById('directBtn');
   const shareBtn     = document.getElementById('shareBtn');
 
-  let state = 'stopped';
-  let elapsedSeconds = 0;
-  let elapsedTimer = null;
-
-  function formatTime(sec){
-    const m = Math.floor(sec / 60).toString().padStart(2,'0');
-    const s = Math.floor(sec % 60).toString().padStart(2,'0');
-    return m + ':' + s;
-  }
-
-  function setState(next){
-    state = next;
-    playBtn.classList.remove('is-playing','is-loading');
-    waveLeft.classList.remove('playing');
-    waveRight.classList.remove('playing');
-    liveTag.classList.add('idle');
-    progressFill.classList.remove('animate');
-
-    if (state === 'loading'){
-      playBtn.classList.add('is-loading');
-    } else if (state === 'live'){
-      playBtn.classList.add('is-playing');
-      waveLeft.classList.add('playing');
-      waveRight.classList.add('playing');
-      liveTag.classList.remove('idle');
-      progressFill.classList.add('animate');
-    }
-
-    if (state === 'live'){
-      if (!elapsedTimer){
-        elapsedTimer = setInterval(() => {
-          elapsedSeconds += 1;
-          elapsedEl.textContent = formatTime(elapsedSeconds);
-        }, 1000);
-      }
-    } else {
-      clearInterval(elapsedTimer);
-      elapsedTimer = null;
-      if (state === 'stopped'){
-        elapsedSeconds = 0;
-        elapsedEl.textContent = '00:00';
-      }
-    }
-  }
-
-  function startStream(){
-    setState('loading');
-    playerFrame.src = STREAM_URL;
-    if (isIOS){
-      // Give it a moment to load, then reveal — the user's next tap
-      // needs to land on vdo.ninja's own play button inside the frame.
-      nativePlayer.classList.add('visible');
-      nativeHint.classList.remove('hidden');
-    }
-  }
-
-  function stopStream(){
-    // IMPORTANT: an empty string resolves to this page's own URL, which
-    // would make the hidden iframe load a recursive copy of this very
-    // page (and freeze the tab). 'about:blank' actually clears it.
-    playerFrame.src = 'about:blank';
-    setState('stopped');
-    if (isIOS){
-      nativePlayer.classList.remove('visible');
-      nativeHint.classList.add('hidden');
-    }
-  }
+  let frameLoaded = false;
 
   playerFrame.addEventListener('load', () => {
-    // Confirms the stream document actually loaded — the real signal we
-    // trust, instead of guessing from unreliable postMessage volume data.
-    // Guard against the transient 'about:blank' clear (used on stop/
-    // reconnect) firing its own load event and flipping state too early.
-    if (playerFrame.src === STREAM_URL && state === 'loading'){
-      setState('live');
+    // Only means the document loaded, not that audio is confirmed
+    // playing (we have no reliable way to know that cross-origin) —
+    // but it's an honest, non-guessy signal that the panel is live.
+    if (playerFrame.src === STREAM_URL){
+      frameLoaded = true;
+      liveTag.classList.remove('idle');
     }
-  });
-
-  playBtn.addEventListener('click', () => {
-    if (state === 'stopped'){ startStream(); }
-    else if (state === 'live'){ stopStream(); }
-    // ignore taps while 'loading'
-  });
-  playBtn.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); playBtn.click(); }
   });
 
   reconnectBtn.addEventListener('click', () => {
     reconnectBtn.classList.add('spinning');
-    setState('loading');
+    frameLoaded = false;
+    liveTag.classList.add('idle');
+    // an empty string resolves to this page's own URL and would make the
+    // iframe recursively load a copy of itself — 'about:blank' actually clears it.
     playerFrame.src = 'about:blank';
     setTimeout(() => { playerFrame.src = STREAM_URL; }, 150);
-    if (isIOS){
-      nativePlayer.classList.add('visible');
-      nativeHint.classList.remove('hidden');
-    }
     showToast('Reconnecting to the live signal…');
     setTimeout(() => reconnectBtn.classList.remove('spinning'), 1200);
   });
@@ -443,9 +312,9 @@
     }
   });
 
-  // keep-alive watchdog: only acts once we've actually gone live
+  // keep-alive watchdog: only acts once the panel has actually loaded
   setInterval(() => {
-    if (state !== 'live') return;
+    if (!frameLoaded) return;
     if (playerFrame && playerFrame.contentWindow == null){
       playerFrame.src = playerFrame.src;
     }
