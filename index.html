@@ -195,7 +195,7 @@
 
     <div class="controls">
       <div class="tap-panel" id="tapPanel">
-        <iframe id="playerFrame" src="https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart" allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture" allowfullscreen title="Infinite Radio live audio"></iframe>
+        <iframe id="playerFrame" src="https://vdo.ninja/?view=hSKAP98" allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture" allowfullscreen title="Infinite Radio live audio"></iframe>
       </div>
       <div class="tap-instruction"><b>Tap the box above</b> to start listening live</div>
 
@@ -257,7 +257,7 @@
   // actual player, so the tap always lands inside the right browsing
   // context and there's no gesture-propagation issue on any platform
   // (this is what made iOS unreliable before).
-  const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart";
+  const STREAM_URL = "https://vdo.ninja/?view=hSKAP98";
   const DIRECT_URL = "https://vdo.ninja/?view=hSKAP98";
 
   const playerFrame  = document.getElementById('playerFrame');
