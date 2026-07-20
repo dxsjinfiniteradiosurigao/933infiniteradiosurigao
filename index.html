@@ -167,7 +167,15 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
-  #playerFrame{position:fixed; left:0; bottom:0; width:280px; height:70px; border:none; opacity:0; pointer-events:none; z-index:-1;}
+  .native-player{
+    margin-top:14px; border-radius:16px; overflow:hidden;
+    border:1px solid var(--glass-brd); background:rgba(255,255,255,0.04);
+    max-height:0; opacity:0; transition:max-height 0.4s ease, opacity 0.3s ease;
+  }
+  .native-player.visible{max-height:90px; opacity:1;}
+  .native-player iframe{width:100%; height:90px; border:none; display:block; background:transparent;}
+  .native-player-hint{font-size:10px; text-align:center; color:var(--text-dimmer); margin-top:8px; letter-spacing:0.01em;}
+  .native-player-hint.hidden{display:none;}
 
   @media (prefers-reduced-motion: reduce){
     .bg span, .art .ring, .wave.playing span, .time-row .live-tag .dot, .progress-fill.animate{animation:none !important;}
@@ -242,12 +250,16 @@
           <span>Share</span>
         </button>
       </div>
+
+      <div class="native-player" id="nativePlayer">
+        <iframe id="playerFrame" allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture" allowfullscreen title="Infinite Radio live audio"></iframe>
+      </div>
+      <div class="native-player-hint hidden" id="nativeHint">iPhone requires one direct tap on the player above to start audio</div>
     </div>
 
     <div class="tagline">News · Talk · Music — <b>tap play</b> to join the signal, live from Surigao City.</div>
   </div>
 
-  <iframe id="playerFrame" allow="encrypted-media; autoplay; camera *; microphone *; fullscreen; picture-in-picture; display-capture" allowfullscreen title="Infinite Radio live audio"></iframe>
   <div class="toast" id="toast"></div>
 
 <script>
@@ -287,7 +299,18 @@
   const STREAM_URL = "https://vdo.ninja/?view=hSKAP98&cleanoutput&transparent&autostart";
   const DIRECT_URL = "https://vdo.ninja/?view=hSKAP98";
 
+  // iOS/iPadOS (all browsers there are WebKit under the hood, this
+  // isn't Safari-specific). WebKit does not let a tap on our page count
+  // as the user gesture that authorizes audio to autoplay *inside* a
+  // cross-origin iframe — the gesture has to land directly inside that
+  // iframe's own document. So on iOS we reveal the real vdo.ninja player
+  // (with its own native play button) instead of keeping it hidden.
+  const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   const playerFrame  = document.getElementById('playerFrame');
+  const nativePlayer = document.getElementById('nativePlayer');
+  const nativeHint   = document.getElementById('nativeHint');
   const playBtn      = document.getElementById('playBtn');
   const waveLeft     = document.getElementById('waveLeft');
   const waveRight    = document.getElementById('waveRight');
@@ -346,6 +369,12 @@
   function startStream(){
     setState('loading');
     playerFrame.src = STREAM_URL;
+    if (isIOS){
+      // Give it a moment to load, then reveal — the user's next tap
+      // needs to land on vdo.ninja's own play button inside the frame.
+      nativePlayer.classList.add('visible');
+      nativeHint.classList.remove('hidden');
+    }
   }
 
   function stopStream(){
@@ -354,6 +383,10 @@
     // page (and freeze the tab). 'about:blank' actually clears it.
     playerFrame.src = 'about:blank';
     setState('stopped');
+    if (isIOS){
+      nativePlayer.classList.remove('visible');
+      nativeHint.classList.add('hidden');
+    }
   }
 
   playerFrame.addEventListener('load', () => {
@@ -380,6 +413,10 @@
     setState('loading');
     playerFrame.src = 'about:blank';
     setTimeout(() => { playerFrame.src = STREAM_URL; }, 150);
+    if (isIOS){
+      nativePlayer.classList.add('visible');
+      nativeHint.classList.remove('hidden');
+    }
     showToast('Reconnecting to the live signal…');
     setTimeout(() => reconnectBtn.classList.remove('spinning'), 1200);
   });
