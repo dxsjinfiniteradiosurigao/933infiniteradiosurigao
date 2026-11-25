@@ -962,14 +962,14 @@
     "btn": "surface",
     "font": "modern",
     "titleFx": "none",
-    "frameFx": "spin",
+    "frameFx": "glow",
     "particles": "none",
     "deco": "none",
-    "motion": "lively",
-    "radius": 24,
-    "glass": 115,
+    "motion": "normal",
+    "radius": 28,
+    "glass": 100,
     "size": 100,
-    "pcount": 120,
+    "pcount": 40,
     "accentA": "",
     "accentB": "",
     "greeting": "",
@@ -1977,7 +1977,7 @@
     tapPanel.classList.toggle('stealth', pmode === 'button' && !playerShown);
     const state = !isOnline() ? 'offline' : started ? (frameLoaded ? 'playing' : 'starting') : 'idle';
     playPanel.dataset.state = state;
-    if (typeof cm !== 'undefined' && cm.mq && amListening() !== lastListening) presencePublish();
+    if (typeof cm !== 'undefined' && cm.mqs.length && amListening() !== lastListening) presencePublish();
     ppMain.textContent = state === 'playing' ? 'Live now' : state === 'starting' ? 'Connecting…' : state === 'offline' ? "You're offline" : userPaused ? 'Paused' : 'Tap to listen live';
     ppSub.textContent = state === 'playing' ? (playerShown ? 'If it is silent, press play inside the player.' : 'Tap to pause') : state === 'starting' ? 'Starting the live signal' : state === 'offline' ? 'The stream returns when you are back online' : userPaused ? 'Tap play to continue' : (S.autoTap ? 'Or just tap anywhere on the page' : 'Press play to start');
     showBtn.hidden = !(started && state !== 'offline') && !playerShown;
@@ -2095,7 +2095,7 @@
 
   // online / offline
   window.addEventListener('offline', () => { goOffline(); showToast('You are offline. The stream will return when you reconnect.'); });
-  window.addEventListener('online', () => { showToast('Back online. Reconnecting…'); if (pmode === 'box' || started) connect(); else paintPlayer(); });
+  window.addEventListener('online', () => { if (cm.mode === 'mqtt') cm.mqs.forEach(mqReconnect); showToast('Back online. Reconnecting…'); if (pmode === 'box' || started) connect(); else paintPlayer(); });
 
   // keep-alive watchdog: only acts once the panel has actually loaded
   setInterval(() => {
@@ -2107,7 +2107,7 @@
   // Uses a free Firebase Realtime Database through its plain web (REST) interface, so no extra scripts load.
   // Counter: every open page writes a server timestamp under presence/<id> once a minute; anyone seen in the last 2.5 minutes counts.
   // Chat: new messages are fetched every few seconds (no always-open connection, which keeps the free plan's limits roomy).
-  const cm = {mode:'', mq:null, mqTimers:[], mqRetry:0, mqIdx:0, attempt:0, pid:'', ents:{}, slots:{}, base:'', key:'', timers:[], pollT:0, busy:false, lastKey:'', msgs:[], seen:new Set(), first:true, unread:0, open:false, id:'', name:'', lastSend:0, lastText:'', preview:false};
+  const cm = {mode:'', mqs:[], mqTimers:[], pid:'', ents:{}, slots:{}, base:'', key:'', timers:[], pollT:0, busy:false, lastKey:'', msgs:[], seen:new Set(), first:true, unread:0, open:false, id:'', name:'', lastSend:0, lastText:'', preview:false};
   try { cm.id = localStorage.getItem('ir.cid') || ''; cm.name = localStorage.getItem('ir.name') || ''; } catch(e) {}
   if (!/^[a-z0-9]{6,24}$/.test(cm.id)) { cm.id = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8); try { localStorage.setItem('ir.cid', cm.id); } catch(e) {} }
   const hueOf = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; };
@@ -2248,11 +2248,14 @@
     showNameOrForm(); $('chatIn').focus();
   });
   $('chatForm').addEventListener('submit', e => { e.preventDefault(); sendChat($('chatIn').value); });
-  /* ---- free public server: a tiny MQTT-over-WebSocket client (no extra scripts). Chat and the counter update the instant something happens. ---- */
+  /* ---- free public servers: a tiny MQTT-over-WebSocket client (no extra scripts).
+        The page talks to several public servers AT ONCE and merges everything, so two visitors only need ONE server in common,
+        even if one of them can't reach the others (some networks block some servers). ---- */
   const MQ_SLOTS = 40, FALLBACK_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+  const MQ_DEBUG = /[?&#]debug\b/i.test(location.search + location.hash);
   function mqttClient(o){
     const enc = new TextEncoder(), dec = new TextDecoder();
-    let ws = null, buf = new Uint8Array(0), ping = 0, alive = false, closed = false;
+    let ws = null, buf = new Uint8Array(0), ping = 0, alive = false, closed = false, lastRx = Date.now();
     const u16 = n => [n >> 8, n & 255];
     const str = s => { const b = enc.encode(s); return [].concat(u16(b.length), Array.from(b)); };
     const varLen = n => { const r = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; r.push(d); } while (n > 0); return r; };
@@ -2280,32 +2283,49 @@
     return {
       open(){
         closed = false; ws = new WebSocket(o.url, 'mqtt'); ws.binaryType = 'arraybuffer';
-        // clean session + a "will": if this page vanishes, the server clears our entry in the listener count by itself
-        ws.onopen = () => send(pkt(0x10, [].concat(str('MQTT'), [4, 0x02 | 0x04 | 0x20], u16(60), str(o.clientId), str(o.willTopic), u16(0))));
-        ws.onmessage = e => onData(new Uint8Array(e.data));
+        // a "will": if this page vanishes without saying goodbye, the server tells everyone for us
+        const wp = Array.from(enc.encode(o.willPayload || ''));
+        ws.onopen = () => send(pkt(0x10, [].concat(str('MQTT'), [4, 0x02 | 0x04], u16(60), str(o.clientId), str(o.willTopic), u16(wp.length), wp)));
+        lastRx = Date.now();
+        ws.onmessage = e => { lastRx = Date.now(); onData(new Uint8Array(e.data)); };
         ws.onclose = () => { clearInterval(ping); alive = false; if (!closed) o.onClose(); };
         ws.onerror = () => {};
-        clearInterval(ping); ping = setInterval(() => send(new Uint8Array([0xC0, 0])), 30000);
+        clearInterval(ping); ping = setInterval(() => send(new Uint8Array([0xC0, 0])), 20000);
       },
       publish(topic, payload, retain){ const p = typeof payload === 'string' ? Array.from(enc.encode(payload)) : payload; send(pkt(0x30 | (retain ? 1 : 0), [].concat(str(topic), p))); },
-      subscribe(topics){ send(pkt(0x82, [].concat(u16(1), topics.reduce((a, t) => a.concat(str(t), [0]), [])))); },
+      subscribe(topics){ if (topics.length) send(pkt(0x82, [].concat(u16(1), topics.reduce((a, t) => a.concat(str(t), [0]), [])))); },
       close(){ closed = true; clearInterval(ping); alive = false; try { ws.close(); } catch(e) {} },
-      get alive(){ return alive; }
+      get alive(){ return alive; },
+      get lastRx(){ return lastRx; }
     };
   }
   const mqRoom = () => 'irs/' + (String(S.room || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || 'radio');
   let lastListening = null;
   const amListening = () => started && frameLoaded;
   function mqBrokers(){ const p = /^wss:\/\//i.test(S.broker || '') ? S.broker : DEFAULTS.broker; return [p].concat(FALLBACK_BROKERS.filter(b => b !== p)); }
+  const mqUp = () => cm.mqs.filter(s => s.up);
+  const mqAlive = () => mqUp().length > 0;
+  function mqPub(topic, payload, retain){ mqUp().forEach(s => { try { s.client.publish(topic, payload, retain); } catch(e) {} }); }
+  const hostOf = u => u.replace(/^wss?:\/\//, '').split(/[:\/]/)[0];
+  function mqStatus(){
+    const up = mqUp();
+    if (!up.length) { if (S.chatOn) setChatStatus(cm.mqs.length ? 'Connecting to the chat servers…' : ''); $('lc').hidden = true; return; }
+    setChatStatus(MQ_DEBUG ? 'Connected to ' + up.map(s => hostOf(s.url)).join(', ') + ' (' + up.length + ' of ' + cm.mqs.length + ')' : '');
+    mqCount();
+  }
+  // Counter: everyone announces themselves every 20 seconds (not stored anywhere) and a newcomer asks "who is here?",
+  // so the number is always live and old entries cannot pile up. Someone who vanishes drops out within a minute, or at once when they leave cleanly.
   function presencePublish(){
-    if (!cm.mq || !cm.mq.alive || cm.preview || !S.countOn) return;
+    if (cm.preview || !S.countOn || !mqAlive()) return;
     lastListening = amListening();
-    cm.mq.publish(mqRoom() + '/p/' + cm.pid, JSON.stringify({l:lastListening ? 1 : 0, t:Date.now()}), true);
+    cm.ents[cm.pid] = {l:lastListening ? 1 : 0, rx:Date.now()};
+    mqPub(mqRoom() + '/p/' + cm.pid, JSON.stringify({l:lastListening ? 1 : 0}), false);
+    mqCount();
   }
   function mqCount(){
     const now = Date.now(); let listen = 0, online = 0;
-    Object.keys(cm.ents).forEach(id => { const e = cm.ents[id]; if (e.t && now - e.t > 900000) return; online++; if (e.l) listen++; });
-    if (cm.mq && cm.mq.alive) setCount(listen, online);
+    Object.keys(cm.ents).forEach(id => { const e = cm.ents[id]; if (now - e.rx > 150000) { if (id !== cm.pid) delete cm.ents[id]; else e.rx = now; return; } online++; if (e.l) listen++; });
+    if (mqAlive() && S.countOn) setCount(listen, online);
   }
   function mqMessage(topic, bytes, retained){
     const room = mqRoom();
@@ -2313,63 +2333,82 @@
     const rest = topic.slice(room.length + 1);
     if (rest.indexOf('p/') === 0) {
       const id = rest.slice(2);
-      if (!bytes.length) delete cm.ents[id];
-      else { try { const p = JSON.parse(new TextDecoder().decode(bytes)); cm.ents[id] = {l:p.l ? 1 : 0, t:+p.t || 0}; } catch(e) {} }
+      if (retained || id === cm.pid) return;                 // old stored entries and our own echo are ignored
+      let p; try { p = JSON.parse(new TextDecoder().decode(bytes)); } catch(e) { return; }
+      if (p && p.b) delete cm.ents[id]; else if (p) cm.ents[id] = {l:p.l ? 1 : 0, rx:Date.now()};
       mqCount();
+    } else if (rest.indexOf('q/') === 0) {
+      if (!retained && rest.slice(2) !== cm.pid) setTimeout(presencePublish, Math.random() * 1800);   // someone new asked who is here
     } else if (rest.indexOf('c/') === 0) {
       const slot = +rest.slice(2);
       if (!(slot >= 0 && slot < MQ_SLOTS) || !bytes.length) return;
       let m; try { m = JSON.parse(new TextDecoder().decode(bytes)); } catch(e) { return; }
       if (!m || typeof m.t !== 'string' || typeof m.n !== 'string') return;
       const ts = Math.min(+m.ts || 0, Date.now() + 86400000), u = typeof m.u === 'string' ? m.u.slice(0, 24) : '';
-      cm.slots[slot] = ts;
+      cm.slots[slot] = Math.max(cm.slots[slot] || 0, ts);
       addMessages([[String(ts).padStart(14, '0') + '_' + u, {n:m.n, t:m.t, u, ts}]], false, retained);
     }
   }
   function mqStop(){
-    cm.mqTimers.forEach(clearInterval); cm.mqTimers = []; clearTimeout(cm.mqRetry);
-    if (cm.mq) { try { if (cm.mq.alive && !cm.preview) cm.mq.publish(mqRoom() + '/p/' + cm.pid, '', true); } catch(e) {} cm.mq.close(); }
-    cm.mq = null;
+    cm.mqTimers.forEach(clearInterval); cm.mqTimers = [];
+    if (cm.mqs.length && !cm.preview) mqPub(mqRoom() + '/p/' + cm.pid, '{"b":1}', false);
+    cm.mqs.forEach(s => { clearTimeout(s.timer); if (s.client) s.client.close(); });
+    cm.mqs = [];
   }
-  function mqStart(idx){
+  // A connection that has gone quiet (laptop slept, wifi changed, phone idle) can look open while nothing arrives. Detect it and reconnect.
+  function mqReconnect(s){ try { if (s.client) s.client.close(); } catch(e) {} s.up = false; clearTimeout(s.timer); s.attempt = 0; if (cm.mqs.indexOf(s) >= 0) s.connect(); }
+  function mqWatchdog(strict){
+    const now = Date.now();
+    cm.mqs.forEach(s => { if (s.up && s.client && now - s.client.lastRx > (strict ? 40000 : 55000)) mqReconnect(s); });
+    mqStatus();
+  }
+  function mqStart(){
     if (cm.mode !== 'mqtt') return;
     mqStop();
-    const list = mqBrokers(); idx = idx % list.length;
-    const room = mqRoom(); let opened = false;
-    const client = mqttClient({
-      url:list[idx], clientId:'irs-' + cm.pid, willTopic:room + '/p/' + cm.pid,
-      onOpen(){
-        opened = true; cm.attempt = 0; cm.mqIdx = idx;
-        client.subscribe((S.chatOn ? [room + '/c/+'] : []).concat(S.countOn ? [room + '/p/+'] : []));
-        setChatStatus('');
-        presencePublish();
-        cm.mqTimers.push(setInterval(presencePublish, 120000));
-        cm.mqTimers.push(setTimeout(() => { if (cm.mq === client) { cm.first = false; renderChat(); } }, 1500));
-        if (idx > 0) cm.mqTimers.push(setTimeout(() => { if (cm.mq === client) mqStart(0); }, 120000));   // come back to the main server when it returns
-        mqCount();
-      },
-      onMessage:mqMessage,
-      onClose(){
-        if (cm.mq !== client) return;
-        setChatStatus('Reconnecting…'); $('lc').hidden = true;
-        cm.mqRetry = setTimeout(() => mqStart(opened ? 0 : idx + 1), Math.min(30000, 1500 * Math.pow(2, Math.min(cm.attempt++, 5))));
-      }
+    const room = mqRoom();
+    mqBrokers().forEach((url, k) => {
+      const s = {url, up:false, client:null, attempt:0, timer:0};
+      cm.mqs.push(s);
+      const retry = () => { s.timer = setTimeout(s.connect, Math.min(30000, 2000 * Math.pow(2, Math.min(s.attempt++, 4)))); };
+      s.connect = () => {
+        if (cm.mqs.indexOf(s) < 0) return;
+        let opened = false;
+        const c = mqttClient({
+          url, clientId:'irs-' + cm.pid + '-' + k, willTopic:room + '/p/' + cm.pid, willPayload:'{"b":1}',
+          onOpen(){
+            opened = true; s.up = true; s.attempt = 0; clearTimeout(s.timer);
+            c.subscribe((S.chatOn ? [room + '/c/+'] : []).concat(S.countOn ? [room + '/p/+', room + '/q/+'] : []));
+            if (S.countOn && !cm.preview) c.publish(room + '/q/' + cm.pid, '', false);   // "who is here?"
+            presencePublish();
+            if (cm.first) cm.mqTimers.push(setTimeout(() => { cm.first = false; renderChat(); }, 1800));
+            mqStatus();
+          },
+          onMessage:mqMessage,
+          onClose(){ s.up = false; mqStatus(); if (cm.mqs.indexOf(s) >= 0) retry(); }
+        });
+        s.client = c; c.open();
+        s.timer = setTimeout(() => { if (!opened && s.client === c) { c.close(); s.up = false; mqStatus(); retry(); } }, 9000);   // this server is not answering, try again later
+      };
+      s.connect();
     });
-    cm.mq = client; client.open();
-    cm.mqRetry = setTimeout(() => { if (cm.mq === client && !opened) { client.close(); cm.mq = null; mqStart(idx + 1); } }, 7000);   // this server is not answering, try the next
+    cm.mqTimers.push(setInterval(presencePublish, 25000));
+    cm.mqTimers.push(setInterval(mqCount, 10000));
+    cm.mqTimers.push(setInterval(() => mqWatchdog(false), 15000));
+    // a safety net: now and then ask again for the recent messages, so nothing is missed even if a live delivery was lost
+    cm.mqTimers.push(setInterval(() => { if (!document.hidden && S.chatOn) mqUp().forEach(s => { try { s.client.subscribe([room + '/c/+']); } catch(e) {} }); }, 60000));
   }
   function mqttSend(text){
-    if (!cm.mq || !cm.mq.alive) { showToast('Chat is reconnecting. Try again in a moment.'); cm.lastSend = 0; return; }
+    if (!mqAlive()) { showToast('Chat is connecting. Try again in a moment.'); cm.lastSend = 0; return; }
     let slot = -1, best = -1;
     Object.keys(cm.slots).forEach(k => { if (cm.slots[k] > best) { best = cm.slots[k]; slot = +k; } });
     slot = slot < 0 ? 0 : (slot + 1) % MQ_SLOTS;
     const ts = Date.now();
     cm.slots[slot] = ts;
-    cm.mq.publish(mqRoom() + '/c/' + slot, JSON.stringify({n:cm.name, t:text, u:cm.id, ts}), true);
+    mqPub(mqRoom() + '/c/' + slot, JSON.stringify({n:cm.name, t:text, u:cm.id, ts}), true);
     $('chatIn').value = '';
     addMessages([[String(ts).padStart(14, '0') + '_' + cm.id, {n:cm.name, t:text, u:cm.id, ts}]], true, false);
   }
-  window.addEventListener('pagehide', () => { if (cm.mq && cm.mq.alive && !cm.preview) { try { cm.mq.publish(mqRoom() + '/p/' + cm.pid, '', true); } catch(e) {} } });
+  window.addEventListener('pagehide', () => { if (cm.mqs.length && !cm.preview) mqPub(mqRoom() + '/p/' + cm.pid, '{"b":1}', false); });
 
   function commConfigure(){
     const mode = S.commMode === 'firebase' ? 'firebase' : 'public';
@@ -2387,13 +2426,13 @@
     if (!chatOn && cm.open) closeChat();
     cm.lastKey = ''; cm.msgs = []; cm.seen = new Set(); cm.first = true; cm.unread = 0; cm.slots = {}; cm.ents = {}; renderBadge();
     if (!active) return;
-    if (cm.mode === 'mqtt') { cm.pid = cm.id.slice(0, 8) + Math.random().toString(36).slice(2, 6); mqStart(0); return; }
+    if (cm.mode === 'mqtt') { cm.pid = cm.id.slice(0, 8) + Math.random().toString(36).slice(2, 6); mqStart(); return; }
     if (countOn) { beat().then(readCount); cm.timers.push(setInterval(beat, 60000)); cm.timers.push(setInterval(readCount, 45000)); }
     if (chatOn) schedulePoll(400);
   }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !cm.base) return;
-    if (cm.mode === 'mqtt') { if (!cm.mq || !cm.mq.alive) { clearTimeout(cm.mqRetry); mqStart(0); } return; }
+    if (cm.mode === 'mqtt') { cm.mqs.forEach(s => { if (!s.up) { clearTimeout(s.timer); s.connect(); } }); mqWatchdog(true); presencePublish(); return; }
     if (S.countOn) readCount(); if (S.chatOn) schedulePoll(0);
   });
 
