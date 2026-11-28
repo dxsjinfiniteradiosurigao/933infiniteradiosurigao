@@ -336,9 +336,14 @@
   .tap-panel.stealth{position:fixed; right:0; bottom:0; width:2px; height:2px; opacity:.01; pointer-events:none; overflow:hidden; border:0; margin:0; z-index:-1; box-shadow:none;}
   .tap-panel.stealth::before{display:none;}
   [data-pmode="button"]:not(.pshow) .tap-instruction{display:none;}
+  [data-src="audio"] .tap-panel,[data-src="audio"] .tap-instruction,[data-src="audio"] .pp-show{display:none !important;}
+  .pp-vol{width:100%; max-width:12rem; margin-top:.55rem; accent-color:var(--c); display:block;}
+  .pp-vol[hidden]{display:none;}
   [data-pmode="button"].pshow .tap-panel{margin-top:.7rem;}
   .tap-instruction{text-align:center; font-size:.78rem; color:var(--dim); margin-top:.65rem;}
   .tap-instruction b{color:rgb(var(--fg)); font-weight:700;}
+  [data-pmode="box"] .tap-instruction{animation:tapHint calc(2.2s * var(--spd)) ease-in-out infinite;}
+  @keyframes tapHint{0%,100%{opacity:.7; transform:translateY(0);} 50%{opacity:1; transform:translateY(-2px);}}
 
   .live-row{display:flex; align-items:center; justify-content:center; gap:1rem; margin-top:.9rem; font-variant-numeric:tabular-nums; font-size:.7rem; color:var(--dim);}
   .live-tag{display:flex; align-items:center; gap:.4rem; font-weight:700; letter-spacing:.08em;}
@@ -880,6 +885,7 @@
           <div class="pp-text">
             <div class="pp-main" id="ppMain">Tap to listen live</div>
             <div class="pp-sub" id="ppSub"></div>
+            <input class="pp-vol" id="ppVol" type="range" min="0" max="100" value="100" aria-label="Volume" hidden>
             <button class="pp-show" id="showPlayer" type="button" hidden>No sound? Show player</button>
           </div>
         </div>
@@ -962,14 +968,14 @@
     "btn": "surface",
     "font": "modern",
     "titleFx": "none",
-    "frameFx": "glow",
+    "frameFx": "spin",
     "particles": "none",
     "deco": "none",
-    "motion": "normal",
-    "radius": 28,
-    "glass": 100,
+    "motion": "lively",
+    "radius": 24,
+    "glass": 115,
     "size": 100,
-    "pcount": 40,
+    "pcount": 120,
     "accentA": "",
     "accentB": "",
     "greeting": "",
@@ -978,6 +984,7 @@
     "place": "Surigao City · Live Broadcast",
     "tagline": "News · Talk · Music — **tap play** to join the signal, live from Surigao City.",
     "stream": "https://vdo.ninja/?view=hSKAP98",
+    "audioUrl": "",
     "playerMode": "button",
     "autoTap": true,
     "hostStyle": "blend",
@@ -1392,7 +1399,7 @@
   const PARTICLES=[['none','None'],['snow','Snow'],['confetti','Confetti'],['sparkles','Sparkles'],['bubbles','Bubbles'],['stars','Twinkling stars'],['fireflies','Fireflies'],['embers','Embers'],['rain','Rain'],['hearts','Hearts'],['bats','Bats'],['leaves','Autumn leaves']];
   const DECOS   = [['none','None'],['lights','Christmas lights'],['frame','Glowing frame'],['webs','Cobwebs and spider'],['moon','Full moon']];
   const HOSTSTYLES=[['poster','Poster'],['circles','Portraits'],['broadcast','TV lower third'],['blend','Soft blend']];
-  const PLAYMODES = [['button','Big play button (player hidden)'],['box','Player box (listeners tap it)']];
+  const PLAYMODES = [['auto','Smart: hidden on computers, visible on phones'],['button','Hidden everywhere (big play button)'],['box','Visible everywhere (tap the player)']];
   const COMMMODES = [['public','Free public server (no setup)'],['firebase','My own Firebase database']];
   const SPEED   = {off:1, calm:1.8, normal:1, lively:.55};
 
@@ -1442,6 +1449,7 @@
       ['chatTitle','welcome'].forEach(k => { if (typeof o[k] === 'string') out[k] = o[k].slice(0, 160); });
       if (typeof o.blocked === 'string') out.blocked = o.blocked.slice(0, 600);
       if (typeof o.room === 'string') out.room = o.room.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+      if (typeof o.audioUrl === 'string') { const a = o.audioUrl.trim(); out.audioUrl = /^https:\/\/[^\s]{4,300}$/i.test(a) ? a : ''; }
       if (typeof o.broker === 'string') out.broker = /^wss:\/\/[^\s]{4,180}$/i.test(o.broker.trim()) ? o.broker.trim() : '';
       if (typeof o.fbUrl === 'string') { const u = o.fbUrl.trim().replace(/\/+$/, ''); out.fbUrl = (u === '' || FB_RE.test(u)) ? u : ''; }
       ['chatOn','countOn','autoTap'].forEach(k => { if (typeof o[k] === 'boolean') out[k] = o[k]; });
@@ -1639,7 +1647,7 @@
   let pgKey = '', lastFitKey = '';
   function renderProgram(){
     const card = $('program');
-    if (!S.showProgram || !programs.some(p => p.on)) { card.hidden = true; body.classList.remove('pgart'); pgKey = ''; renderMeta(null, false); renderNP(null); renderSheet(null, false); renderToday(nowInfo(), null); return; }
+    if (!S.showProgram || !programs.some(p => p.on)) { card.hidden = true; body.classList.remove('pgart'); pgKey = ''; renderMeta(null, false); renderNP(null); renderSheet(null, false); renderToday(nowInfo(), null); renderSession(null); return; }
     const now = nowInfo(), r = findPrograms(now), c = r.cur, n = r.nxt;
     const art = !!c && S.programArt && body.dataset.layout !== 'compact';   // title card replaces the artwork
     body.classList.toggle('pgart', art);
@@ -1677,7 +1685,7 @@
     }
     card.hidden = art && !nextTxt;
     if (key !== lastFitKey) { lastFitKey = key; scheduleFit(); }
-    renderMeta(c, art); renderNP(c); renderSheet(c, true); renderToday(now, c);
+    renderMeta(c, art); renderNP(c); renderSheet(c, true); renderToday(now, c); renderSession(c);
     $('pgBarWrap').style.display = c ? '' : 'none';
     const pct = c ? (clamp(c.el / c.dur, 0, 1) * 100).toFixed(1) + '%' : '0%';
     $('pgBar').style.setProperty('--p', pct); $('pcBar').style.setProperty('--p', pct);
@@ -1960,7 +1968,53 @@
   // and the player stays hidden. If a device still stays silent, "Show player" lets that listener press play once, and we remember it.
   const lsGet = k => { try { return localStorage.getItem(k); } catch(e) { return null; } };
   const lsSet = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e) {} };
-  let pmode = null, started = false, userPaused = false, playerShown = false;
+  let pmode = null, started = false, userPaused = false, playerShown = false, audioMode = null;
+  // Direct audio stream (MP3 / AAC from Icecast, Shoutcast and the like): played by this page itself, so ONE tap on our own button works on phones too,
+  // the sound keeps going with the screen off, and the lock screen gets play/pause controls.
+  const audioEl = new Audio(); audioEl.preload = 'none'; audioEl.setAttribute('playsinline', '');
+  let audioTry = 0, audioT = 0, audioWatch = 0, volumeOk = false;
+  try { audioEl.volume = 0.5; volumeOk = audioEl.volume === 0.5; audioEl.volume = 1; } catch(e) {}
+  const useAudio = () => /^https:\/\/[^\s]{4,300}$/i.test(S.audioUrl || '');
+  function audioHalt(){
+    clearTimeout(audioT); clearTimeout(audioWatch);
+    try { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); } catch(e) {}
+  }
+  function audioStart(){
+    clearTimeout(audioT); clearTimeout(audioWatch);
+    started = true; userPaused = false; frameLoaded = false;
+    if (!isOnline()) { goOffline(); return; }
+    body.classList.remove('offline');
+    const u = S.audioUrl; audioEl.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + 'listen=' + Date.now();
+    setState('idle');
+    const p = audioEl.play(); if (p && p.catch) p.catch(() => audioRetry());
+    audioWatch = setTimeout(() => { if (started && !frameLoaded) audioRetry(); }, 15000);
+  }
+  function audioRetry(){
+    if (!started || userPaused || !useAudio()) return;
+    frameLoaded = false; setState('idle');
+    clearTimeout(audioT); audioT = setTimeout(() => { if (started && !userPaused && useAudio()) audioStart(); }, Math.min(8000, 2000 * (++audioTry)));
+  }
+  audioEl.addEventListener('playing', () => { audioTry = 0; clearTimeout(audioWatch); frameLoaded = true; setState('live'); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; });
+  audioEl.addEventListener('waiting', () => { if (started && useAudio()) { frameLoaded = false; setState('idle'); clearTimeout(audioWatch); audioWatch = setTimeout(() => { if (started && !frameLoaded) audioRetry(); }, 15000); } });
+  ['error', 'ended'].forEach(ev => audioEl.addEventListener(ev, () => { if (started && !userPaused && useAudio()) audioRetry(); }));
+  try { const v = parseFloat(localStorage.getItem('ir.vol')); if (isFinite(v) && v >= 0 && v <= 1) { audioEl.volume = v; $('ppVol').value = Math.round(v * 100); } } catch(e) {}
+  $('ppVol').addEventListener('input', e => { audioEl.volume = +e.target.value / 100; try { localStorage.setItem('ir.vol', String(audioEl.volume)); } catch(e2) {} });
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.setActionHandler('play', () => { if (useAudio()) startStream(); });
+      navigator.mediaSession.setActionHandler('pause', () => { if (useAudio()) stopStream(true); });
+      navigator.mediaSession.setActionHandler('stop', () => { if (useAudio()) stopStream(true); });
+    } catch(e) {}
+  }
+  function renderSession(c){
+    if (!('mediaSession' in navigator) || !window.MediaMetadata || !metaBase) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: c ? c.p.title : (S.idleTitle || metaBase.name), artist: c ? (c.p.host || metaBase.name) : metaBase.place, album: metaBase.freq + ' ' + metaBase.name,
+        artwork: [{src: LOGO, sizes: '480x234', type: 'image/webp'}]
+      });
+    } catch(e) {}
+  }
 
   function setState(s){
     liveTag.classList.remove('live','offline');
@@ -1979,8 +2033,9 @@
     playPanel.dataset.state = state;
     if (typeof cm !== 'undefined' && cm.mqs.length && amListening() !== lastListening) presencePublish();
     ppMain.textContent = state === 'playing' ? 'Live now' : state === 'starting' ? 'Connecting…' : state === 'offline' ? "You're offline" : userPaused ? 'Paused' : 'Tap to listen live';
-    ppSub.textContent = state === 'playing' ? (playerShown ? 'If it is silent, press play inside the player.' : 'Tap to pause') : state === 'starting' ? 'Starting the live signal' : state === 'offline' ? 'The stream returns when you are back online' : userPaused ? 'Tap play to continue' : (S.autoTap ? 'Or just tap anywhere on the page' : 'Press play to start');
-    showBtn.hidden = !(started && state !== 'offline') && !playerShown;
+    ppSub.textContent = state === 'starting' && audioMode && audioTry > 0 ? 'Reconnecting to the stream…' : state === 'playing' ? (playerShown ? 'If it is silent, press play inside the player.' : 'Tap to pause') : state === 'starting' ? 'Starting the live signal' : state === 'offline' ? 'The stream returns when you are back online' : userPaused ? 'Tap play to continue' : (S.autoTap ? 'Or just tap anywhere on the page' : 'Press play to start');
+    showBtn.hidden = (!(started && state !== 'offline') && !playerShown) || audioMode;
+    $('ppVol').hidden = !(audioMode && volumeOk);
     showBtn.textContent = playerShown ? 'Hide player' : 'No sound? Show player';
     if (tapInst) { tapInst.textContent = ''; const b = document.createElement('b'); if (pmode === 'button') { b.textContent = 'No sound?'; tapInst.appendChild(b); tapInst.appendChild(document.createTextNode(' Press play inside the box above')); } else { b.textContent = 'Tap the box above'; tapInst.appendChild(b); tapInst.appendChild(document.createTextNode(' to start listening live')); } }
   }
@@ -1990,21 +2045,31 @@
     connect();
   }
   function stopStream(manual){
+    audioHalt(); audioTry = 0;
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     started = false; userPaused = !!manual; frameLoaded = false;
     playerFrame.setAttribute('src', 'about:blank'); currentSrc = 'about:blank';
     setState('idle');
   }
   function applyPlayerMode(){
-    const m = S.playerMode === 'box' ? 'box' : 'button';
+    const wantAudio = useAudio();
+    body.dataset.src = wantAudio ? 'audio' : 'vdo';
+    if (audioMode !== null && wantAudio !== audioMode) { stopStream(false); playerShown = false; pmode = null; }   // the source changed: start clean
+    audioMode = wantAudio;
+    // Phones only start sound when the tap lands INSIDE the player itself, so on touch devices "smart" shows the player box
+    const touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    let m = S.playerMode === 'box' ? 'box' : S.playerMode === 'button' ? 'button' : (touch ? 'box' : 'button');
+    if (wantAudio) m = 'button';   // our own big play button works everywhere when the page plays the audio itself
     if (m === pmode) { paintPlayer(); return; }
     const first = pmode === null; pmode = m;
-    if (first) { playerShown = m === 'button' && lsGet('ir.needsBox') === '1'; started = playerShown; }
+    if (first) { playerShown = m === 'button' && !wantAudio && lsGet('ir.needsBox') === '1'; started = playerShown; }
     else if (m === 'box') { playerShown = false; if (isOnline() && currentSrc !== streamUrl()) { started = true; connect(); } }
     else if (!first) { playerShown = false; stopStream(false); }
     paintPlayer();
   }
   function load(url){ currentSrc = url; playerFrame.setAttribute('src', url); }
   function connect(){
+    if (useAudio()) { audioStart(); return; }
     frameLoaded = false;
     if (!isOnline()) { goOffline(); return; }
     body.classList.remove('offline');
@@ -2013,6 +2078,7 @@
     setTimeout(() => load(streamUrl()), 150);
   }
   function goOffline(){
+    if (audioMode) audioHalt();
     frameLoaded = false;
     body.classList.add('offline');
     setState('offline');
